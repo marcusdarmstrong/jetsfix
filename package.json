@@ -13,7 +13,7 @@
     "preview": "astro preview",
     "deploy": "astro build && wrangler deploy",
     "typecheck": "astro check",
-    "test": "node --test 'migration/test/*.test.mjs'",
+    "test": "node --test 'migration/test/*.test.mjs' 'test/*.test.mjs'",
     "migrate:convert": "node migration/ghost-to-emdash.mjs convert",
     "migrate:import": "node migration/ghost-to-emdash.mjs import",
     "migrate:check-text": "node migration/check-text.mjs",

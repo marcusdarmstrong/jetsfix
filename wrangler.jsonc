@@ -5,12 +5,16 @@
 	"compatibility_date": "2026-02-24",
 	"compatibility_flags": ["nodejs_compat"],
 	// Preview phase: the editor evaluates EmDash here while Ghost keeps serving
-	// jetsfix.com. At cutover, swap this route (and EMDASH_SITE_URL) to
-	// jetsfix.com + www.jetsfix.com — see README "Cutover".
-	"routes": [{ "pattern": "jetsfix-preview.com", "custom_domain": true }],
+	// jetsfix.com. www is canonical; the bare domain 301s to it (middleware).
+	// At cutover, swap these (and EMDASH_SITE_URL) to www.jetsfix.com +
+	// jetsfix.com — see README "Cutover".
+	"routes": [
+		{ "pattern": "www.jetsfix-preview.com", "custom_domain": true },
+		{ "pattern": "jetsfix-preview.com", "custom_domain": true },
+	],
 	"vars": {
 		// Passkeys are bound to this origin; set before running the setup wizard.
-		"EMDASH_SITE_URL": "https://jetsfix-preview.com",
+		"EMDASH_SITE_URL": "https://www.jetsfix-preview.com",
 	},
 	"d1_databases": [
 		{

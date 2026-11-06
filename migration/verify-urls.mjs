@@ -2,8 +2,8 @@
 /**
  * URL-compatibility check: every URL the Ghost site served must still work.
  *
- *   node migration/verify-urls.mjs --base https://jetsfix-preview.com \
- *        [--urls migration/out/urls.txt] [--sitemap https://jetsfix.com/sitemap.xml]
+ *   node migration/verify-urls.mjs --base https://www.jetsfix-preview.com \
+ *        [--urls migration/out/urls.txt] [--sitemap http://www.jetsfix.com/sitemap.xml]
  *
  * --urls     paths from `ghost-to-emdash.mjs convert` (every published post)
  * --sitemap  also pull every <loc> from the live Ghost sitemap (index or

@@ -38,7 +38,8 @@ Ghost served `http://www.jetsfix.com/:slug/`. The new site keeps every path:
   `/:slug` also works. Slugs are imported unchanged; the importer aborts a
   post if EmDash would alter its slug.
 - `http://` → `https://` and `jetsfix.com` → `www.jetsfix.com` are 301s that
-  keep the path (`src/middleware.ts`).
+  keep the path (`src/middleware.ts`, hosts in `src/utils/hosts.ts`). The
+  preview mirrors this: `jetsfix-preview.com` → `www.jetsfix-preview.com`.
 - Ghost-only URLs redirect (seed `redirects`): `/rss/` → `/rss.xml`,
   `/:slug/amp/` → `/:slug/`, `/author/*`, `/page/N/` and Ghost's empty
   default tag `/tag/getting-started/` → `/posts`.
@@ -79,7 +80,7 @@ deployed from a laptop.
    - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
      `EMDASH_ENCRYPTION_KEY` (from `npx emdash secrets generate`; keep a copy
      in your password manager — GitHub secrets can't be read back).
-   - Variable: `SITE_URL` = `https://jetsfix-preview.com` (later
+   - Variable: `SITE_URL` = `https://www.jetsfix-preview.com` (later
      `https://www.jetsfix.com`).
    - Environment `production` (optionally with required reviewers).
    - Protect `main`; require the CI check.
@@ -88,13 +89,13 @@ deployed from a laptop.
    first Backup run creates the `jetsfix-backups` bucket. Give that bucket a
    lifecycle rule (e.g. expire after 365 days) in the dashboard.
 
-## Preview launch (jetsfix-preview.com)
+## Preview launch (www.jetsfix-preview.com)
 
 Ghost keeps serving jetsfix.com untouched while the editor tries EmDash.
 The preview sends `X-Robots-Tag: noindex` and a blocking `robots.txt`, so it
 can't compete with jetsfix.com in search.
 
-1. Deploy (above). Visit `https://jetsfix-preview.com/_emdash/admin` and
+1. Deploy (above). Visit `https://www.jetsfix-preview.com/_emdash/admin` and
    complete the setup wizard — **you** create the admin account (passkey).
 2. Create an API token in the admin (Settings → API tokens, admin scope).
 3. Import:
@@ -102,18 +103,19 @@ can't compete with jetsfix.com in search.
    scp gcp-box:/path/to/ghost/content/data/ghost.db /tmp/ghost.db   # fresh copy
    npm run migrate:convert -- --db /tmp/ghost.db --out migration/out
    npm run migrate:check-text -- /tmp/ghost.db migration/out/posts.ndjson   # expect "lost: 0"
-   EMDASH_TOKEN=... npm run migrate:import -- --url https://jetsfix-preview.com --out migration/out
+   EMDASH_TOKEN=... npm run migrate:import -- --url https://www.jetsfix-preview.com --out migration/out
    ```
    Re-running `import` is safe: finished entries are skipped, half-finished
    ones (created but not yet published) are completed.
 4. Verify every old URL resolves on the preview:
    ```bash
-   npm run migrate:verify-urls -- --base https://jetsfix-preview.com \
+   npm run migrate:verify-urls -- --base https://www.jetsfix-preview.com \
      --urls migration/out/urls.txt --sitemap http://www.jetsfix.com/sitemap.xml
    ```
 5. Invite the editor from the admin (Users). Passkeys are bound to the
    origin, so accounts made on the preview will need a new passkey on
-   www.jetsfix.com after cutover.
+   www.jetsfix.com after cutover. If Disqus "Trusted Domains" is in use, add
+   `www.jetsfix-preview.com`.
 
 The preview is a snapshot: posts published on Ghost after the import aren't
 on it. That's fine for evaluation; cutover re-imports from scratch.
@@ -134,7 +136,8 @@ fully moved, so rollback is "point DNS back".
    preview hostname, then import from a fresh `ghost.db` copy (Preview launch
    steps 2–4).
 4. **Switch the Worker to production** (PR to `main`):
-   - `routes`: `www.jetsfix.com` and `jetsfix.com`, both `custom_domain: true`
+   - `routes`: replace the two preview hosts with `www.jetsfix.com` and
+     `jetsfix.com`, both `custom_domain: true`
    - `vars.EMDASH_SITE_URL`: `https://www.jetsfix.com`
    - GitHub variable `SITE_URL`: `https://www.jetsfix.com`
 
@@ -179,7 +182,7 @@ converted result; the last run lost 0 of 2.3M words.
 - **Disqus comments** (shortname `jetsfix`). The old theme keyed threads by
   the post's exact `http://www.jetsfix.com/<slug>/` URL, and
   `DisqusThread.astro` passes that same string, so existing threads show up
-  unchanged. During the preview, comments posted on jetsfix-preview.com go
+  unchanged. During the preview, comments posted on www.jetsfix-preview.com go
   into the real threads; if Disqus "Trusted Domains" is set, add the preview
   domain there.
 - **favicon.ico.**
