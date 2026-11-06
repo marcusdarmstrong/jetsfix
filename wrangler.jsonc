@@ -58,4 +58,8 @@
 		"crons": ["* * * * *"],
 	},
 	"observability": { "enabled": true },
+	// Run the Worker next to D1 (Eastern North America) instead of at the
+	// visitor's edge location. Every page and admin request makes many
+	// sequential D1 queries; without this each one pays a network round trip.
+	"placement": { "mode": "smart" },
 }
