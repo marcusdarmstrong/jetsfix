@@ -15,7 +15,7 @@ Replaces the Ghost 0.11 / SQLite / nginx box on GCP (`104.196.124.191`).
 | Database | SQLite file on the VM | D1 (`jetsfix`), Time Travel + nightly dumps |
 | Media | `content/images` on the VM | R2 (`jetsfix-media`) |
 | TLS | none (HTTP only) | Cloudflare-managed, auto-renewing |
-| Deploys | ssh | merge to `main` → GitHub Actions |
+| Deploys | ssh | merge to `main` → Cloudflare Workers Builds |
 
 ## Layout
 
@@ -27,7 +27,7 @@ src/pages/[slug].astro  Post page, served at Ghost's /:slug/ URLs
 src/components/LegacyHtmlBlock.astro  Renders Ghost-era embeds verbatim
 src/middleware.ts       http→https, apex→www, noindex for non-prod hosts
 migration/              Ghost → EmDash importer, content-loss + URL checks
-.github/workflows/      ci (PRs), deploy (main), backup (nightly)
+.github/workflows/      ci (PRs + main), backup (nightly)
 ```
 
 ## URL compatibility (hard requirement)
@@ -65,29 +65,57 @@ npm run migrate:import  -- --url http://localhost:4321 --out migration/out
 
 ## One-time setup
 
-All deploys and Cloudflare changes go through GitHub Actions; nothing is
-deployed from a laptop.
+Deploys happen only from GitHub: Cloudflare **Workers Builds** watches `main`
+and deploys every merge. GitHub Actions runs CI on PRs and the nightly
+backup. All Cloudflare resources are provisioned by hand and pinned by ID in
+`wrangler.jsonc`, so a deploy never creates anything.
 
 1. **Cloudflare account** on Workers Paid ($5/mo). The Worker is ~5 MB
    gzipped — over the free plan's 3 MB cap.
-2. **Domains.** `jetsfix-preview.com` must be an active zone in that account.
-   For the real cutover, `jetsfix.com` must become one too (nameservers are
-   at Namecheap today — see [Cutover](#cutover)).
-3. **Cloudflare API token** (My Profile → API Tokens → Create Token → "Edit
-   Cloudflare Workers" template), then add **Account · D1 · Edit** and, under
-   Zone Resources, include `jetsfix-preview.com` (later `jetsfix.com`).
-4. **GitHub repository settings:**
-   - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
-     `EMDASH_ENCRYPTION_KEY` (from `npx emdash secrets generate`; keep a copy
-     in your password manager — GitHub secrets can't be read back).
-   - Variable: `SITE_URL` = `https://www.jetsfix-preview.com` (later
-     `https://www.jetsfix.com`).
-   - Environment `production` (optionally with required reviewers).
-   - Protect `main`; require the CI check.
-5. **First deploy:** push to `main` (or run the Deploy workflow). Wrangler
-   creates the D1 database, R2 media bucket and KV namespace by name; the
-   first Backup run creates the `jetsfix-backups` bucket. Give that bucket a
-   lifecycle rule (e.g. expire after 365 days) in the dashboard.
+2. **Zone** `jetsfix-preview.com` active (later `jetsfix.com` too — see
+   [Cutover](#cutover)), with no existing records on the apex or `www`.
+3. **Resources** (pin new IDs in `wrangler.jsonc`):
+
+   | Type | Name | ID |
+   |---|---|---|
+   | Worker | `jetsfix` | — |
+   | D1 | `jetsfix` (Eastern North America) | `9316f585-ef16-4c70-8e40-326220f90450` |
+   | KV | `jetsfix-session` | `d6948afc23a4438ebada734c660b3286` |
+   | R2 | `jetsfix-media` | by name |
+   | R2 | `jetsfix-backups` (lifecycle: expire after 365 days) | by name |
+
+4. **Workers Builds** on the `jetsfix` Worker: repo
+   `marcusdarmstrong/jetsfix`, production branch `main`, build command
+   `npm run build`, deploy command `npx wrangler deploy`, non-production
+   branch builds **off** (they would share the real D1 database), build
+   variable `NODE_VERSION=24` (also in `.node-version`).
+5. **Worker secret** `EMDASH_ENCRYPTION_KEY` (Worker → Settings → Variables
+   and Secrets, type Secret), from `npx emdash secrets generate`. Keep a copy
+   in your password manager. Deploys never remove secrets.
+6. **Backup token** (account-owned): D1 Content Read-Only on `jetsfix` and
+   R2 Editor on `jetsfix-backups`. In GitHub, `production` environment
+   secrets `CLOUDFLARE_BACKUP_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+7. **GitHub:** protect `main` and require the CI check, so Workers Builds
+   only ever sees green commits.
+
+### Database migrations
+
+EmDash's core migrations run automatically on the first request after a
+deploy (`auto` mode). Two cases need `emdash migrate` run by hand with a
+D1:Edit token (see the [EmDash docs](https://docs.emdashcms.com/deployment/core-migrations/)):
+
+- **Stuck lock** — a request that stops mid-migration (e.g. the very first
+  one on an empty database) leaves the lock held and the site answers 503
+  "Database migrations are required". Run
+  `npx emdash migrate --status --wrangler-config wrangler.jsonc`, confirm the
+  target, then `--take-over-lock <id>`.
+- **Large content migrations** — with ~10k posts, a migration that rewrites
+  every entry exceeds what a request may do; the site 503s until
+  `npx emdash migrate --wrangler-config wrangler.jsonc` is run.
+
+Keep the token in a gitignored `.env.migrate` and load it only for the
+command: `(set -a && . ./.env.migrate && set +a && npx emdash migrate ...)`.
+Build first (`npm run build`) — the command reads `.emdash/migrations.json`.
 
 ## Preview launch (www.jetsfix-preview.com)
 
@@ -95,7 +123,7 @@ Ghost keeps serving jetsfix.com untouched while the editor tries EmDash.
 The preview sends `X-Robots-Tag: noindex` and a blocking `robots.txt`, so it
 can't compete with jetsfix.com in search.
 
-1. Deploy (above). Visit `https://www.jetsfix-preview.com/_emdash/admin` and
+1. Merge to `main`. Visit `https://www.jetsfix-preview.com/_emdash/admin` and
    complete the setup wizard — **you** create the admin account (passkey).
 2. Create an API token in the admin (Settings → API tokens, admin scope).
 3. Import:
@@ -132,14 +160,14 @@ fully moved, so rollback is "point DNS back".
 2. **Freeze Ghost:** ask the editor to stop publishing; note any scheduled
    posts.
 3. **Fresh database:** reset the D1 database (or point `wrangler.jsonc` at a
-   new one, e.g. `jetsfix-prod`), deploy, run the setup wizard on the
+   new one, e.g. `jetsfix-prod`, pinned by ID), deploy, run the setup wizard on the
    preview hostname, then import from a fresh `ghost.db` copy (Preview launch
    steps 2–4).
 4. **Switch the Worker to production** (PR to `main`):
    - `routes`: replace the two preview hosts with `www.jetsfix.com` and
      `jetsfix.com`, both `custom_domain: true`
    - `vars.EMDASH_SITE_URL`: `https://www.jetsfix.com`
-   - GitHub variable `SITE_URL`: `https://www.jetsfix.com`
+   - Workers Builds needs no change; the deploy picks up the new routes.
 
    Attaching the custom domains replaces the old A records and issues the
    certificate (auto-renewing).

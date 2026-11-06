@@ -16,11 +16,18 @@
 		// Passkeys are bound to this origin; set before running the setup wizard.
 		"EMDASH_SITE_URL": "https://www.jetsfix-preview.com",
 	},
+	// Resources are provisioned by hand and pinned by ID so deploys never
+	// create or look anything up.
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "jetsfix",
+			"database_id": "9316f585-ef16-4c70-8e40-326220f90450",
 		},
+	],
+	"kv_namespaces": [
+		// Astro/EmDash admin sessions (jetsfix-session)
+		{ "binding": "SESSION", "id": "d6948afc23a4438ebada734c660b3286" },
 	],
 	"r2_buckets": [
 		{
