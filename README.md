@@ -40,7 +40,8 @@ Ghost served `http://www.jetsfix.com/:slug/`. The new site keeps every path:
 - `http://` → `https://` and `jetsfix.com` → `www.jetsfix.com` are 301s that
   keep the path (`src/middleware.ts`).
 - Ghost-only URLs redirect (seed `redirects`): `/rss/` → `/rss.xml`,
-  `/:slug/amp/` → `/:slug/`, `/author/*` and `/page/N/` → `/posts`.
+  `/:slug/amp/` → `/:slug/`, `/author/*`, `/page/N/` and Ghost's empty
+  default tag `/tag/getting-started/` → `/posts`.
 - Links inside posts to `jetsfix.com` are rewritten to site-relative paths.
 
 `migration/verify-urls.mjs` proves this before cutover (see below).
