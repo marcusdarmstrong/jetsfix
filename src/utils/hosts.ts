@@ -1,13 +1,52 @@
 /**
- * Hostnames that are the real jetsfix.com. Everything else (the
- * jetsfix-preview.com evaluation site, *.workers.dev, localhost) is a copy
- * and is noindexed.
+ * Host policy for the sites this Worker serves.
+ *
+ * Both sites use www as the canonical host (as Ghost did for jetsfix.com);
+ * the bare domain and plain http 301 to https://www.<domain>, keeping the
+ * path. Only production is indexable. Any other host (*.workers.dev,
+ * localhost) gets no redirects and is noindexed.
  */
-export const CANONICAL_HOST = "www.jetsfix.com";
-export const PRODUCTION_HOSTS = new Set([CANONICAL_HOST, "jetsfix.com"]);
+interface Site {
+	canonical: string;
+	aliases: string[];
+	indexable: boolean;
+}
+
+export const PRODUCTION: Site = {
+	canonical: "www.jetsfix.com",
+	aliases: ["jetsfix.com"],
+	indexable: true,
+};
+
+/** Evaluation copy for the editor; same content, kept out of search. */
+export const PREVIEW: Site = {
+	canonical: "www.jetsfix-preview.com",
+	aliases: ["jetsfix-preview.com"],
+	indexable: false,
+};
+
+const SITES = [PRODUCTION, PREVIEW];
+
+export function siteFor(hostname: string): Site | undefined {
+	return SITES.find((s) => s.canonical === hostname || s.aliases.includes(hostname));
+}
+
+/**
+ * Where a request to a known site should be 301'd (https + canonical host,
+ * path and query kept), or null if it's already canonical / not ours.
+ */
+export function canonicalRedirect(url: URL): string | null {
+	const site = siteFor(url.hostname);
+	if (!site || (url.protocol === "https:" && url.hostname === site.canonical)) return null;
+	const target = new URL(url.href);
+	target.protocol = "https:";
+	target.hostname = site.canonical;
+	target.port = "";
+	return target.href;
+}
 
 export function isProduction(url: URL): boolean {
-	return PRODUCTION_HOSTS.has(url.hostname);
+	return siteFor(url.hostname) === PRODUCTION;
 }
 
 /**

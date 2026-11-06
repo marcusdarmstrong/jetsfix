@@ -5,18 +5,29 @@
 	"compatibility_date": "2026-02-24",
 	"compatibility_flags": ["nodejs_compat"],
 	// Preview phase: the editor evaluates EmDash here while Ghost keeps serving
-	// jetsfix.com. At cutover, swap this route (and EMDASH_SITE_URL) to
-	// jetsfix.com + www.jetsfix.com — see README "Cutover".
-	"routes": [{ "pattern": "jetsfix-preview.com", "custom_domain": true }],
+	// jetsfix.com. www is canonical; the bare domain 301s to it (middleware).
+	// At cutover, swap these (and EMDASH_SITE_URL) to www.jetsfix.com +
+	// jetsfix.com — see README "Cutover".
+	"routes": [
+		{ "pattern": "www.jetsfix-preview.com", "custom_domain": true },
+		{ "pattern": "jetsfix-preview.com", "custom_domain": true },
+	],
 	"vars": {
 		// Passkeys are bound to this origin; set before running the setup wizard.
-		"EMDASH_SITE_URL": "https://jetsfix-preview.com",
+		"EMDASH_SITE_URL": "https://www.jetsfix-preview.com",
 	},
+	// Resources are provisioned by hand and pinned by ID so deploys never
+	// create or look anything up.
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "jetsfix",
+			"database_id": "9316f585-ef16-4c70-8e40-326220f90450",
 		},
+	],
+	"kv_namespaces": [
+		// Astro/EmDash admin sessions (jetsfix-session)
+		{ "binding": "SESSION", "id": "d6948afc23a4438ebada734c660b3286" },
 	],
 	"r2_buckets": [
 		{
@@ -24,6 +35,22 @@
 			"bucket_name": "jetsfix-media",
 		},
 	],
+	// PR builds (`wrangler preview`) don't inherit production bindings. By
+	// choice, Previews use the *production* database, sessions and media: a
+	// PR preview reads and writes real content, and a PR that upgrades EmDash
+	// will migrate the production database on its first request. No routes,
+	// crons or EMDASH_SITE_URL here — Previews get their own hostname.
+	"previews": {
+		"d1_databases": [
+			{
+				"binding": "DB",
+				"database_name": "jetsfix",
+				"database_id": "9316f585-ef16-4c70-8e40-326220f90450",
+			},
+		],
+		"kv_namespaces": [{ "binding": "SESSION", "id": "d6948afc23a4438ebada734c660b3286" }],
+		"r2_buckets": [{ "binding": "MEDIA", "bucket_name": "jetsfix-media" }],
+	},
 	// Sandboxed plugins need Worker Loader (Workers Paid). Uncomment to enable:
 	// "worker_loaders": [{ "binding": "LOADER" }],
 	// Scheduled publishing + maintenance. Must match createScheduledHandler() in src/worker.ts.

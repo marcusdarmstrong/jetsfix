@@ -13,8 +13,9 @@ runbook. Rules that override the generic template guidance below:
 - `htmlBlock`s whose HTML starts with `<div data-ghost-embed` are imported
   Ghost embeds (tweets, polls) and render unsanitized on purpose
   (`src/components/LegacyHtmlBlock.astro`).
-- Non-production hosts are noindexed (`src/middleware.ts`); production hosts
-  301 to `https://www.jetsfix.com`.
+- Hosts live in `src/utils/hosts.ts`: production (`www.jetsfix.com`) and the
+  noindexed preview (`www.jetsfix-preview.com`); bare domains and http 301
+  to `https://www.<domain>` (`src/middleware.ts`).
 - No ads for now (README "Deliberately not carried over").
 - Content lives in D1, not git. Schema changes go in `seed/seed.json` *and*
   must be applied to the live site (admin or `npx emdash schema ...`) — the

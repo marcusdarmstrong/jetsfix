@@ -240,6 +240,18 @@
 			"destination": "/[slug]/",
 			"type": 301,
 			"groupName": "ghost"
+		},
+		{
+			"source": "/tag/getting-started",
+			"destination": "/posts",
+			"type": 301,
+			"groupName": "ghost"
+		},
+		{
+			"source": "/tag/getting-started/",
+			"destination": "/posts",
+			"type": 301,
+			"groupName": "ghost"
 		}
 	]
 }
