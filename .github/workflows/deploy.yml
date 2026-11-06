@@ -1,0 +1,73 @@
+name: Deploy
+
+# main is what's live. Merging to main deploys the Worker; there is no other
+# path to production.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    steps:
+      - name: Check repository configuration
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          HAS_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+          HAS_KEY: ${{ secrets.EMDASH_ENCRYPTION_KEY != '' }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          missing=""
+          [ "$HAS_TOKEN" = true ]   || missing="$missing secret:CLOUDFLARE_API_TOKEN"
+          [ "$HAS_ACCOUNT" = true ] || missing="$missing secret:CLOUDFLARE_ACCOUNT_ID"
+          [ "$HAS_KEY" = true ]     || missing="$missing secret:EMDASH_ENCRYPTION_KEY"
+          [ -n "$SITE_URL" ]        || missing="$missing variable:SITE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Not configured yet:$missing (see README 'One-time setup')"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      # Worker secrets come from GitHub secrets on every deploy, so nothing is
+      # ever configured by hand with `wrangler secret put`. The first deploy
+      # also provisions the D1 database, R2 bucket and KV namespace by name.
+      - name: Deploy Worker
+        run: |
+          umask 077
+          node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP + "/secrets.json",
+            JSON.stringify({ EMDASH_ENCRYPTION_KEY: process.env.EMDASH_ENCRYPTION_KEY }))'
+          npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json"
+          rm -f "$RUNNER_TEMP/secrets.json"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EMDASH_ENCRYPTION_KEY: ${{ secrets.EMDASH_ENCRYPTION_KEY }}
+      # EmDash applies pending database migrations on the first request after
+      # a deploy; make that request ourselves and fail loudly if it breaks.
+      - name: Warm up and smoke test
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL/") && [ "$code" = 200 ] && break
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          [ "$code" = 200 ] || { echo "home page not healthy after deploy"; exit 1; }
+          curl -sf -o /dev/null "$SITE_URL/rss.xml"
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}

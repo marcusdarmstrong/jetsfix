@@ -1,0 +1,52 @@
+---
+/**
+ * Portable Text `htmlBlock` renderer.
+ *
+ * Posts imported from Ghost carry third-party embeds (tweets, StrawPoll,
+ * poll-maker, MockDraftable, Imgur, …) that need their vendor <script> tags
+ * to run, exactly as they did on the old site. EmDash's default HtmlBlock
+ * sanitizes those away, so the importer wraps each one in
+ * `<div data-ghost-embed="…">` and we render that markup verbatim.
+ *
+ * Anything else (HTML blocks authored in the EmDash editor) falls through to
+ * the stock, sanitized/isolated renderer.
+ */
+import { HtmlBlock } from "emdash/ui";
+
+interface Props {
+	node: {
+		_type: "htmlBlock";
+		_key: string;
+		html: string;
+		[key: string]: unknown;
+	};
+}
+
+const { node } = Astro.props;
+const html = typeof node?.html === "string" ? node.html : "";
+const isLegacyEmbed = html.trimStart().startsWith("<div data-ghost-embed");
+---
+
+{
+	isLegacyEmbed ? (
+		<Fragment set:html={html} />
+	) : (
+		<HtmlBlock node={node as any} />
+	)
+}
+
+<style>
+	:global([data-ghost-embed]) {
+		margin-block: 1.5rem;
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	:global([data-ghost-embed] iframe) {
+		max-width: 100%;
+	}
+
+	:global([data-ghost-embed] .twitter-tweet) {
+		margin-inline: auto;
+	}
+</style>

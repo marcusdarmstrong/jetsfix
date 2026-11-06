@@ -1,0 +1,41 @@
+{
+  "name": "jetsfix",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "emdash": {
+    "label": "Blog",
+    "seed": "seed/seed.json"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "astro build && wrangler deploy",
+    "typecheck": "astro check",
+    "test": "node --test 'migration/test/*.test.mjs'",
+    "migrate:convert": "node migration/ghost-to-emdash.mjs convert",
+    "migrate:import": "node migration/ghost-to-emdash.mjs import",
+    "migrate:check-text": "node migration/check-text.mjs",
+    "migrate:verify-urls": "node migration/verify-urls.mjs"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.3.1",
+    "@astrojs/react": "^7.0.0",
+    "@emdash-cms/cloudflare": "^1.4.0",
+    "astro": "^7.3.2",
+    "emdash": "^1.4.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "@emdash-cms/gutenberg-to-portable-text": "^1.4.0",
+    "parse5": "^7.3.0",
+    "wrangler": "^4.125.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

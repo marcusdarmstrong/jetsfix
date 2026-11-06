@@ -1,0 +1,38 @@
+name: Nightly D1 backup
+
+# Posts live in D1, not git, so this is the content's safety net on top of
+# D1 Time Travel (30-day point-in-time restore on Workers Paid). Dumps are
+# written to a private R2 bucket; give it a lifecycle rule (e.g. delete after
+# 365 days) in the Cloudflare dashboard.
+on:
+  schedule:
+    - cron: "17 7 * * *" # 03:17 ET-ish, after the overnight lull
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Export D1 and upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler r2 bucket info jetsfix-backups >/dev/null 2>&1 \
+            || npx wrangler r2 bucket create jetsfix-backups
+          stamp=$(date -u +%Y-%m-%dT%H%MZ)
+          npx wrangler d1 export jetsfix --remote --output "jetsfix-$stamp.sql"
+          gzip -9 "jetsfix-$stamp.sql"
+          ls -lh "jetsfix-$stamp.sql.gz"
+          npx wrangler r2 object put "jetsfix-backups/d1/jetsfix-$stamp.sql.gz" \
+            --file "jetsfix-$stamp.sql.gz" --remote
