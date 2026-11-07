@@ -1,4 +1,5 @@
 ---
+import { LOGO, TWITTER_HANDLE, footerCredit } from "../utils/brand";
 import { getMenuWithCacheHint, getSiteSettingsWithCacheHint } from "emdash";
 import {
 	WidgetArea,
@@ -103,7 +104,6 @@ function navCurrent(url: string): "page" | "true" | undefined {
 }
 
 const lang = getSiteLocale() ?? "en";
-const monogram = [...siteTitle.trim()][0]?.toUpperCase() ?? "";
 const year = new Date().getFullYear();
 ---
 
@@ -117,6 +117,14 @@ const year = new Date().getFullYear();
 		<title>{fullTitle}</title>
 		<EmDashHead page={pageCtx} />
 		<link rel="icon" href="/favicon.ico" sizes="any" />
+		<meta name="twitter:site" content={`@${TWITTER_HANDLE}`} />
+		<!-- Disqus comment counts for "#disqus_thread" links (see PostCard). -->
+		<script
+			is:inline
+			id="dsq-count-scr"
+			src="https://jetsfix.disqus.com/count.js"
+			async
+		></script>
 		<link
 			rel="alternate"
 			type="application/rss+xml"
@@ -152,11 +160,13 @@ const year = new Date().getFullYear();
 							/>
 						) : (
 							<>
-								{monogram && (
-									<span class="brand__mark" aria-hidden="true">
-										{monogram}
-									</span>
-								)}
+								<img
+									src={LOGO.src}
+									width={LOGO.width}
+									height={LOGO.height}
+									alt=""
+									class="brand__icon"
+								/>
 								<span class="brand__name">{siteTitle}</span>
 							</>
 						)
@@ -271,11 +281,13 @@ const year = new Date().getFullYear();
 								/>
 							) : (
 								<>
-									{monogram && (
-										<span class="brand__mark" aria-hidden="true">
-											{monogram}
-										</span>
-									)}
+									<img
+										src={LOGO.src}
+										width={LOGO.width}
+										height={LOGO.height}
+										alt=""
+										class="brand__icon"
+									/>
 									<span class="brand__name">{siteTitle}</span>
 								</>
 							)
@@ -340,8 +352,7 @@ const year = new Date().getFullYear();
 			<div class="band site-footer__bottom">
 				<div class="frame site-footer__bottom-inner">
 					<p class="site-footer__meta">
-						{`© ${year} ${siteTitle}.`} Powered by{" "}
-						<a href="https://emdashcms.com">EmDash</a>
+						{footerCredit(year)}
 					</p>
 					<div class="theme-switcher" role="group" aria-label="Color theme">
 						<button
@@ -1058,18 +1069,10 @@ const year = new Date().getFullYear();
 				text-decoration: none;
 			}
 
-			.brand__mark {
-				display: grid;
-				place-items: center;
+			.brand__icon {
 				flex-shrink: 0;
-				width: 1.75rem;
+				width: auto;
 				height: 1.75rem;
-				border-radius: var(--radius);
-				background: var(--color-brand);
-				color: var(--color-on-brand);
-				font-size: var(--font-size-sm);
-				font-weight: 600;
-				letter-spacing: 0;
 			}
 
 			.brand__name {

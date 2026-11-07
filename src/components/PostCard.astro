@@ -2,6 +2,8 @@
 import type { ContentEntry, InferCollectionData } from "emdash";
 import { Image } from "emdash/ui";
 import Byline from "./Byline.astro";
+import { autoExcerpt } from "../utils/brand";
+import { legacyPostUrl } from "../utils/hosts";
 import { formatDate } from "../utils/locale";
 import { formatReadingTime, getReadingTime } from "../utils/reading-time";
 
@@ -31,6 +33,8 @@ const publishedAt = post.data.publishedAt ?? null;
 const readingTime = formatReadingTime(getReadingTime(post.data.content));
 const bylines = post.data.bylines ?? [];
 const visibleTags = tags.slice(0, variant === "card" ? 2 : 3);
+// Ghost showed the first ~33 words when a post had no custom excerpt.
+const excerpt = post.data.excerpt || autoExcerpt(post.data.content);
 
 const sizes = {
 	card: "(min-width: 1080px) 360px, (min-width: 700px) 45vw, 100vw",
@@ -71,9 +75,9 @@ const sizes = {
 				{title}
 			</Heading>
 			{
-				post.data.excerpt && (
+				excerpt && (
 					<p class="post__excerpt" {...post.edit.excerpt}>
-						{post.data.excerpt}
+						{excerpt}
 					</p>
 				)
 			}
@@ -104,6 +108,15 @@ const sizes = {
 						max={variant === "card" ? 1 : 2}
 						size={variant === "feature" ? "sm" : "xs"}
 					/>
+					{/* Disqus count.js (Base.astro) fills in "N Comments"; the thread
+					    is keyed by the old Ghost URL. */}
+					<a
+						href={`${href}#disqus_thread`}
+						class="post__comments"
+						data-disqus-url={legacyPostUrl(post.id)}
+					>
+						Comments
+					</a>
 					{visibleTags.length > 0 && (
 						<ul class="chips post__tags" aria-label="Tags">
 							{visibleTags.map((tag) => (
@@ -122,6 +135,18 @@ const sizes = {
 </article>
 
 <style>
+	.post__comments {
+		position: relative;
+		z-index: 1;
+		font-size: var(--font-size-xs);
+		color: var(--color-muted);
+		white-space: nowrap;
+	}
+
+	.post__comments:hover {
+		color: var(--color-text);
+	}
+
 	.post {
 		position: relative;
 		display: flex;

@@ -10,6 +10,7 @@ import {
 import { Image, PortableText, WidgetArea } from "emdash/ui";
 import LegacyHtmlBlock from "../components/LegacyHtmlBlock.astro";
 import DisqusThread from "../components/DisqusThread.astro";
+import { TWITTER_HANDLE } from "../utils/brand";
 import Base from "../layouts/Base.astro";
 import Byline from "../components/Byline.astro";
 import PostCard from "../components/PostCard.astro";
@@ -75,14 +76,29 @@ const readingTime = getReadingTime(post.data.content);
 // no extra query needed.
 const tags = post.data.terms?.tag ?? [];
 
-// Fetch a few extra recent posts in case the current post is among them.
-const { entries: recentPosts, cacheHint: recentPostsCacheHint } =
-	await getEmDashCollection("posts", {
-		orderBy: { published_at: "desc" },
-		limit: 4,
-	});
-if (Astro.cache?.enabled) Astro.cache.set(recentPostsCacheHint);
-const otherPosts = recentPosts.filter((p) => p.id !== post.id).slice(0, 3);
+// Ghost's "read next": the posts published just after and just before this
+// one (not the newest posts, which are unrelated on an old article).
+const currentPublishedAt = post.data.publishedAt?.toISOString();
+const [newer, older] = currentPublishedAt
+	? await Promise.all([
+			getEmDashCollection("posts", {
+				where: { published_at: { gt: currentPublishedAt } },
+				orderBy: { published_at: "asc" },
+				limit: 1,
+			}),
+			getEmDashCollection("posts", {
+				where: { published_at: { lt: currentPublishedAt } },
+				orderBy: { published_at: "desc" },
+				limit: 1,
+			}),
+		])
+	: [];
+for (const r of [newer, older]) if (r && Astro.cache?.enabled) Astro.cache.set(r.cacheHint);
+const otherPosts = [...(newer?.entries ?? []), ...(older?.entries ?? [])];
+
+// Share links point at this page's canonical URL.
+const shareUrl = encodeURIComponent(seo.canonical ?? Astro.url.href);
+const shareText = encodeURIComponent(post.data.title ?? "");
 
 // Single batched query for related-posts tags, rather than one
 // getEntryTerms() call per related post.
@@ -241,6 +257,25 @@ const hasHeadings = (post.data.content ?? []).some(
 							components={{ type: { htmlBlock: LegacyHtmlBlock } }}
 						/>
 					</div>
+					<section class="post-share" aria-label="Share this post">
+						<h2 class="eyebrow">Share this post</h2>
+						<a
+							class="chip"
+							href={`https://x.com/intent/post?text=${shareText}&url=${shareUrl}&via=${TWITTER_HANDLE}`}
+							target="_blank"
+							rel="noopener"
+						>
+							Twitter / X
+						</a>
+						<a
+							class="chip"
+							href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`}
+							target="_blank"
+							rel="noopener"
+						>
+							Facebook
+						</a>
+					</section>
 					<DisqusThread slug={slug} />
 
 				</div>
@@ -271,7 +306,7 @@ const hasHeadings = (post.data.content ?? []).some(
 				<div class="frame related">
 					<div class="section-head">
 						<h2 id="continue-reading" class="section-head__title">
-							Continue reading
+							Read next
 						</h2>
 						<a href="/posts" class="arrow-link">
 							All posts
@@ -827,7 +862,19 @@ const hasHeadings = (post.data.content ?? []).some(
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Continue reading */
+	.post-share {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--spacing-2);
+		margin-block-start: var(--spacing-10, 2.5rem);
+	}
+
+	.post-share h2 {
+		margin: 0 var(--spacing-2) 0 0;
+	}
+
+	/* Read next */
 	.related {
 		container-type: inline-size;
 	}

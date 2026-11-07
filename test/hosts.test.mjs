@@ -34,3 +34,15 @@ test("only production is production", () => {
 test("Disqus thread key stays the old http URL", () => {
 	assert.equal(legacyPostUrl("abc"), "http://www.jetsfix.com/abc/");
 });
+
+test("auto excerpt joins spans within a block and truncates like Ghost", async () => {
+	const { autoExcerpt } = await import("../src/utils/brand.ts");
+	const pt = [
+		{ _type: "block", children: [{ text: "Welcome to " }, { text: "JetsFix.com" }, { text: ". Links:" }] },
+		{ _type: "image" },
+		{ _type: "block", children: [{ text: "one two three" }] },
+	];
+	assert.equal(autoExcerpt(pt), "Welcome to JetsFix.com. Links: one two three");
+	assert.equal(autoExcerpt(pt, 3), "Welcome to JetsFix.com.…");
+	assert.equal(autoExcerpt(undefined), "");
+});

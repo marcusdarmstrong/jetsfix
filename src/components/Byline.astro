@@ -1,4 +1,5 @@
 ---
+import { AUTHOR_AVATARS } from "../utils/brand";
 import type { ContentBylineCredit } from "emdash";
 
 interface Props {
@@ -27,7 +28,7 @@ const people = bylines.map(({ byline, roleLabel }) => ({
 	src: byline.avatarStorageKey
 		? (Astro.locals.emdash?.getPublicMediaUrl?.(byline.avatarStorageKey) ??
 			`/_emdash/api/media/file/${byline.avatarStorageKey.split("/").map(encodeURIComponent).join("/")}`)
-		: null,
+		: (AUTHOR_AVATARS[byline.slug] ?? null),
 	initials: byline.displayName
 		.split(WHITESPACE)
 		.filter(Boolean)
