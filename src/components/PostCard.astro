@@ -43,10 +43,14 @@ const sizes = {
 }[variant];
 ---
 
-<article class:list={["post", `post--${variant}`]}>
-	<a href={href} class="post__media" tabindex="-1" aria-hidden="true">
-		{
-			post.data.featured_image ? (
+<article
+	class:list={["post", `post--${variant}`, !post.data.featured_image && "post--no-media"]}
+>
+	{
+		/* No image, no media slot: a grey placeholder on nearly every imported
+		   post made the site look like a stub. */
+		post.data.featured_image && (
+			<a href={href} class="post__media" tabindex="-1" aria-hidden="true">
 				<div class="post__image" {...post.edit.featured_image}>
 					<Image
 						image={post.data.featured_image}
@@ -54,11 +58,9 @@ const sizes = {
 						priority={priority}
 					/>
 				</div>
-			) : (
-				<div class="post__placeholder" />
-			)
-		}
-	</a>
+			</a>
+		)
+	}
 	<div class="post__body">
 		<a href={href} class="post__link" aria-labelledby={titleId}>
 			<span class="post__meta">
@@ -203,18 +205,6 @@ const sizes = {
 
 	.post:has(.post__link:hover, .post__media:hover) .post__image :global(img) {
 		scale: 1.03;
-	}
-
-	.post__placeholder {
-		position: absolute;
-		inset: 0;
-		background-image: radial-gradient(
-			circle,
-			var(--color-border-strong) 1px,
-			transparent 1.5px
-		);
-		background-size: 14px 14px;
-		mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
 	}
 
 	/* Text */
@@ -392,6 +382,11 @@ const sizes = {
 	}
 
 	/* Row: archive list item with an end-side thumbnail */
+	.post--feature.post--no-media,
+	.post--row.post--no-media {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.post--row {
 		--avatar-ring: var(--color-bg);
 		display: grid;
