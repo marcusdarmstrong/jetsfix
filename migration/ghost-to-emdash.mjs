@@ -13,8 +13,16 @@
  * `import` pushes posts.ndjson into a running EmDash site through its REST
  * API, keeping slugs, publish dates, bylines and draft/scheduled status.
  * It skips slugs that already exist, so an interrupted run can simply be
- * re-run. Auth: EMDASH_TOKEN (an admin API token) for remote sites; localhost
- * dev servers use EmDash's dev bypass automatically.
+ * re-run. Entries whose Ghost status changed (e.g. a draft published since)
+ * get their content resent with Ghost's publish date.
+ *
+ * --changed-since <ISO>  also resend content for posts Ghost modified after
+ *                        that time (use the time of the previous Ghost
+ *                        snapshot). Overwrites edits made to those posts in
+ *                        EmDash since the import.
+ *
+ * Auth: EMDASH_TOKEN (an admin API token) for remote sites; localhost dev
+ * servers use EmDash's dev bypass automatically.
  */
 import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -38,6 +46,7 @@ const { positionals, values: args } = parseArgs({
 		limit: { type: "string" },
 		only: { type: "string", multiple: true },
 		"dry-run": { type: "boolean", default: false },
+		"changed-since": { type: "string" },
 	},
 });
 
@@ -109,6 +118,7 @@ async function convert() {
 				status,
 				publishedAt,
 				createdAt: ghostDate(p.created_at),
+				updatedAt: ghostDate(p.updated_at),
 				byline: userSlug.get(p.author_id) ?? null,
 				tags: tagsByPost.get(p.id) ?? [],
 				seo:
@@ -176,6 +186,11 @@ async function importPosts() {
 	}
 	console.log(`target already has ${existing.size} entries`);
 
+	const changedSince = args["changed-since"] ? Date.parse(args["changed-since"]) : null;
+	if (args["changed-since"] && Number.isNaN(changedSince)) {
+		throw new Error(`--changed-since must be an ISO timestamp, got ${args["changed-since"]}`);
+	}
+
 	const todo = [];
 	const rl = createInterface({ input: createReadStream(join(args.out, "posts.ndjson")) });
 	for await (const line of rl) {
@@ -183,11 +198,16 @@ async function importPosts() {
 		const post = JSON.parse(line);
 		if (args.only?.length && !args.only.includes(post.slug)) continue;
 		const have = existing.get(`${post.collection}/${post.slug}`);
-		if (have && have.status === post.status) continue; // already done
-		todo.push({ post, have });
+		// Edited in Ghost after the last import: resend its content.
+		const changed = !!(have && changedSince && post.updatedAt && Date.parse(post.updatedAt) > changedSince);
+		if (have && have.status === post.status && !changed) continue; // already done
+		todo.push({ post, have, update: changed || (have && have.status !== post.status) });
 	}
 	if (args.limit) todo.splice(Number(args.limit));
-	console.log(`importing ${todo.length} entries with concurrency ${args.concurrency}`);
+	const updates = todo.filter((j) => j.update).length;
+	console.log(
+		`importing ${todo.length} entries (${todo.length - updates} new, ${updates} updated) with concurrency ${args.concurrency}`,
+	);
 	if (args["dry-run"]) return;
 
 	const ctx = { client, api, bylineIds, mediaCache: new Map() };
@@ -234,13 +254,37 @@ async function importOne(ctx, job) {
 	const { client, api, bylineIds } = ctx;
 	const { post } = job;
 
-	// Step 1: create (or find the entry a previous/failed attempt created).
-	let item = job.have;
-	if (!item) {
-		const bylineId = post.byline ? bylineIds.get(post.byline) : undefined;
+	const bylineId = post.byline ? bylineIds.get(post.byline) : undefined;
+	const buildData = async () => {
 		const data =
 			post.collection === "posts" ? { ...post.data } : { title: post.data.title, content: post.data.content };
 		if (data.featured_image) data.featured_image = await localizeImage(ctx, data.featured_image);
+		return data;
+	};
+
+	// Step 1: create (or find the entry a previous/failed attempt created).
+	let item = job.have;
+	if (item && job.update) {
+		// Existing entry whose Ghost copy changed (edited, or published since
+		// the last import): resend content and Ghost's publish date.
+		// Raw PUT: the typed client's update() drops bylines and publishedAt.
+		const res = await api(
+			"PUT",
+			`/content/${encodeURIComponent(post.collection)}/${encodeURIComponent(item.id)}`,
+			{
+				data: await buildData(),
+				...(bylineId ? { bylines: [{ bylineId }] } : {}),
+				...(post.status === "published" && post.publishedAt ? { publishedAt: post.publishedAt } : {}),
+				overrideLock: true,
+			},
+		);
+		item = res.item ?? res;
+		job.update = false; // retries resume from the lifecycle step
+		job.updated = true;
+		job.have = item;
+	}
+	if (!item) {
+		const data = await buildData();
 		const body = {
 			data,
 			slug: post.slug,
@@ -266,9 +310,13 @@ async function importOne(ctx, job) {
 		throw new Error(`slug changed: wanted ${post.slug}, got ${item.slug} (URL compat broken)`);
 	}
 
-	// Step 2: lifecycle. publish() keeps the publishedAt set at create.
-	if (post.status === "published" && item.status !== "published") {
+	// Step 2: lifecycle. publish() keeps the publishedAt set at create/update.
+	// An update we just made may sit in a pending draft revision, so republish
+	// it. Never publish other pending drafts (edits made in the EmDash admin).
+	if (post.status === "published" && (item.status !== "published" || job.updated)) {
 		await client.publish(post.collection, item.id);
+	} else if (post.status === "draft" && item.status === "published") {
+		await client.unpublish(post.collection, item.id); // unpublished in Ghost
 	} else if (post.status === "scheduled" && post.publishedAt && item.status !== "scheduled") {
 		if (Date.parse(post.publishedAt) <= Date.now()) {
 			await client.publish(post.collection, item.id); // its time already passed
