@@ -6,16 +6,21 @@
  * as on the old site.
  */
 
-/** Ghost's /content/images/2017/04/icon.png, now public/logo.png. */
+/** Ghost's /content/images/2017/04/icon.png, now public/logo.png (white made
+ * transparent so it works on the dark theme). */
 export const LOGO = { src: "/logo.png", width: 38, height: 41 };
 
 /** Ghost's blog cover: the full-width photo behind the homepage title. */
 export const HERO_IMAGE =
 	"https://static.clubs.nfl.com/image/private/t_editorial_landscape_12_desktop/jets/c6kbhvviiituc1u5arx1";
 
-/** Ghost user profile images, keyed by byline slug (= Ghost user slug). */
+/**
+ * Ghost user profile images, keyed by byline slug (= Ghost user slug).
+ * Site Admin's Ghost avatar was the logo icon as a white-backed JPG on
+ * Twitter; the transparent logo is the same picture and works in dark mode.
+ */
 export const AUTHOR_AVATARS: Record<string, string> = {
-	site: "https://pbs.twimg.com/profile_images/854380206903238656/bsbNxOf0_bigger.jpg",
+	site: LOGO.src,
 	brian: "https://www.gravatar.com/avatar/5e36316489fccb4159ec8e15299b9814?s=250&d=mm&r=x",
 };
 
