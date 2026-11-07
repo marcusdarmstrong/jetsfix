@@ -7,6 +7,7 @@ import {
 import Base from "../layouts/Base.astro";
 import PostCard from "../components/PostCard.astro";
 import { resolveBlogSiteIdentity } from "../utils/site-identity";
+import { HERO_IMAGE } from "../utils/brand";
 
 // Limit to what we render (1 featured + 6 grid). The DB does the slicing
 // instead of fetching every post and discarding the tail in JS.
@@ -62,10 +63,12 @@ const gridPostsWithTags = gridPosts.map((post) => ({
 ---
 
 <Base title={siteTitle} description={siteTagline}>
-	<header class="band intro">
+	<header
+		class="band intro home-hero"
+		style={`--hero-image: url("${HERO_IMAGE}")`}
+	>
 		<div class="frame home-intro">
 			<div>
-				<p class="eyebrow">Blog</p>
 				<h1 class="intro__title">{siteTitle}</h1>
 				{siteTagline && <p class="intro__subtitle">{siteTagline}</p>}
 			</div>
@@ -169,6 +172,29 @@ const gridPostsWithTags = gridPosts.map((post) => ({
 </Base>
 
 <style>
+	/* Ghost/Casper's cover: the Jets photo behind the site title. */
+	.home-hero {
+		position: relative;
+		isolation: isolate;
+		background:
+			linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.55)),
+			var(--hero-image) center / cover no-repeat;
+		color: #fff;
+		padding-block: clamp(4rem, 14vw, 9rem);
+	}
+
+	.home-hero :global(.intro__title),
+	.home-hero :global(.intro__subtitle) {
+		color: #fff;
+		text-shadow: 0 1px 12px rgb(0 0 0 / 0.35);
+	}
+
+	.home-hero .home-intro__rss {
+		color: #fff;
+		border-color: rgb(255 255 255 / 0.6);
+		background: rgb(0 0 0 / 0.2);
+	}
+
 	.home-intro {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
