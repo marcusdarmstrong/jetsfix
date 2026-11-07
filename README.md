@@ -157,12 +157,24 @@ fully moved, so rollback is "point DNS back".
    to Cloudflare, let it import the existing DNS records, confirm they match
    Namecheap (A records → `104.196.124.191`), then switch the nameservers at
    Namecheap to Cloudflare's. Traffic still goes to the GCP box.
-2. **Freeze Ghost:** ask the editor to stop publishing; note any scheduled
-   posts.
-3. **Fresh database:** reset the D1 database (or point `wrangler.jsonc` at a
-   new one, e.g. `jetsfix-prod`, pinned by ID), deploy, run the setup wizard on the
-   preview hostname, then import from a fresh `ghost.db` copy (Preview launch
-   steps 2–4).
+2. **Pre-load production (days ahead, no freeze):** create the production
+   D1 database (e.g. `jetsfix-prod`, pinned by ID — or reuse the preview's),
+   run `emdash migrate`, deploy, run the setup wizard, then do the full
+   import from a fresh `ghost.db` copy (Preview launch steps 2–4). Note the
+   time you copied `ghost.db` — it is the `--changed-since` value below. The
+   import runs at ~1.3 posts/s (~2 h for everything), which is why it
+   happens before the freeze.
+3. **Freeze Ghost and catch up (minutes):** ask the editor to stop publishing
+   and editing in Ghost. Copy `ghost.db` again, `convert`, then
+   ```bash
+   EMDASH_TOKEN=... npm run migrate:import -- --url https://www.jetsfix-preview.com \
+     --out migration/out --changed-since <time of the step-2 copy>
+   ```
+   This creates posts published since step 2, publishes former drafts with
+   Ghost's publish date, unpublishes posts unpublished in Ghost, and resends
+   content for posts edited in Ghost since step 2 (overwriting any EmDash
+   edits to those posts). Deleted Ghost posts are not removed. Re-run
+   `verify-urls` with the live sitemap.
 4. **Switch the Worker to production** (PR to `main`):
    - `routes`: replace the two preview hosts with `www.jetsfix.com` and
      `jetsfix.com`, both `custom_domain: true`
