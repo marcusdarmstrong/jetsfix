@@ -92,9 +92,11 @@ backup. All Cloudflare resources are provisioned by hand and pinned by ID in
 5. **Worker secret** `EMDASH_ENCRYPTION_KEY` (Worker → Settings → Variables
    and Secrets, type Secret), from `npx emdash secrets generate`. Keep a copy
    in your password manager. Deploys never remove secrets.
-6. **Backup token** (account-owned): D1 Content Read-Only on `jetsfix` and
-   R2 Editor on `jetsfix-backups`. In GitHub, `production` environment
-   secrets `CLOUDFLARE_BACKUP_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+6. **Backup credentials** — GitHub `production` environment secrets:
+   `EMDASH_BACKUP_TOKEN` (EmDash admin → Settings → API tokens, export
+   scope), `CLOUDFLARE_BACKUP_TOKEN` (account-owned, R2 Editor on the
+   `jetsfix-backups` bucket only) and `CLOUDFLARE_ACCOUNT_ID`; repo variable
+   `SITE_URL` (the site to back up).
 7. **GitHub:** protect `main` and require the CI check, so Workers Builds
    only ever sees green commits.
 
@@ -194,9 +196,14 @@ fully moved, so rollback is "point DNS back".
 
 - **D1 Time Travel:** point-in-time restore for the last 30 days
   (`npx wrangler d1 time-travel restore jetsfix --timestamp=...`).
-- **Nightly dump:** `.github/workflows/backup.yml` writes a gzipped SQL dump
-  to `r2://jetsfix-backups/d1/`. Restore with
-  `npx wrangler d1 execute <db> --remote --file=<dump.sql>`.
+- **Nightly site export:** `.github/workflows/backup.yml` runs
+  `emdash site export` through the site's API (content, revision history,
+  settings, media — no users or secrets) and writes the package to
+  `r2://jetsfix-backups/site/`. It deliberately avoids `wrangler d1 export`,
+  which makes the database unavailable while it runs. Restore into an
+  empty site with `npx emdash site import <file> --url <site> --analyze`,
+  review the plan, then `--plan sha256:<digest> --confirm`. The package
+  contains author and commenter emails — treat it like a database backup.
 - Media in R2 is small (a logo and one featured image); post images are
   hotlinks to Giphy/Twitter/Imgur as they were on Ghost.
 

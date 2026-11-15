@@ -1,24 +1,40 @@
-name: Nightly D1 backup
+name: Nightly backup
 
-# Posts live in D1, not git, so this is the content's safety net on top of
-# D1 Time Travel (30-day point-in-time restore on Workers Paid). Dumps are
-# written to the private jetsfix-backups bucket (provisioned by hand);
-# give it a lifecycle rule (e.g. delete after 365 days) in the dashboard.
+# Posts live in D1, not git. D1 Time Travel already gives a 30-day
+# point-in-time restore inside Cloudflare; this keeps a portable copy as well.
 #
-# Uses its own narrow token, CLOUDFLARE_BACKUP_TOKEN: read the jetsfix D1
-# database, write objects to jetsfix-backups. It can't deploy anything.
+# It uses EmDash's site export (content, revision history, settings, media)
+# through the site's API, not `wrangler d1 export`, because a D1 export
+# makes the database unavailable while it runs — and GitHub starts scheduled
+# jobs hours late, so that would land in the morning traffic.
+#
+# Restore into an empty site with `npx emdash site import <file> --url ...`
+# (README "Backups"). The package holds author and commenter emails: it goes
+# only to the private jetsfix-backups bucket, never to an Actions artifact
+# (this repo is public).
+#
+# Secrets (production environment):
+#   EMDASH_BACKUP_TOKEN      EmDash API token with export scope
+#   CLOUDFLARE_BACKUP_TOKEN  R2 Editor on the jetsfix-backups bucket only
+#   CLOUDFLARE_ACCOUNT_ID
+# Variable: SITE_URL — the site to back up.
 on:
   schedule:
-    - cron: "17 7 * * *" # 03:17 ET-ish, after the overnight lull
+    - cron: "17 7 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
 jobs:
   backup:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,15 +42,26 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Export D1 and upload to R2
+      - name: Export site
+        env:
+          EMDASH_TOKEN: ${{ secrets.EMDASH_BACKUP_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$EMDASH_TOKEN" ] && [ -n "$SITE_URL" ] || { echo "::error::EMDASH_BACKUP_TOKEN or SITE_URL not set"; exit 1; }
+          echo "STAMP=$(date -u +%Y-%m-%dT%H%MZ)" >> "$GITHUB_ENV"
+          # Re-running the same command resumes an interrupted export.
+          for attempt in 1 2 3; do
+            if npx emdash site export --url "$SITE_URL" --output site.emdash; then exit 0; fi
+            echo "export attempt $attempt failed; resuming"; sleep 30
+          done
+          exit 1
+      - name: Upload to R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BACKUP_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          stamp=$(date -u +%Y-%m-%dT%H%MZ)
-          npx wrangler d1 export jetsfix --remote --output "jetsfix-$stamp.sql"
-          gzip -9 "jetsfix-$stamp.sql"
-          ls -lh "jetsfix-$stamp.sql.gz"
-          npx wrangler r2 object put "jetsfix-backups/d1/jetsfix-$stamp.sql.gz" \
-            --file "jetsfix-$stamp.sql.gz" --remote
+          ls -lh site.emdash
+          npx wrangler r2 object put "jetsfix-backups/site/jetsfix-$STAMP.emdash" \
+            --file site.emdash --remote
