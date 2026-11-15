@@ -94,8 +94,9 @@ backup. All Cloudflare resources are provisioned by hand and pinned by ID in
    in your password manager. Deploys never remove secrets.
 6. **Backup credentials** — GitHub `production` environment secrets:
    `EMDASH_BACKUP_TOKEN` (EmDash admin → Settings → API tokens, export
-   scope), `CLOUDFLARE_BACKUP_TOKEN` (account-owned, R2 Editor on the
-   `jetsfix-backups` bucket only) and `CLOUDFLARE_ACCOUNT_ID`; repo variable
+   scope), `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (R2 → Manage API
+   tokens, Object Read & Write on `jetsfix-backups` only) and
+   `CLOUDFLARE_ACCOUNT_ID`; repo variable
    `SITE_URL` (the site to back up).
 7. **GitHub:** protect `main` and require the CI check, so Workers Builds
    only ever sees green commits.
