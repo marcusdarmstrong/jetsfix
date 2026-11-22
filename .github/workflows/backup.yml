@@ -15,8 +15,10 @@ name: Nightly backup
 #
 # Secrets (production environment):
 #   EMDASH_BACKUP_TOKEN      EmDash API token with export scope
-#   CLOUDFLARE_BACKUP_TOKEN  R2 Editor on the jetsfix-backups bucket only
-#   CLOUDFLARE_ACCOUNT_ID
+#   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+#                            R2 API token (S3 credentials), Object Read &
+#                            Write on the jetsfix-backups bucket only
+#   CLOUDFLARE_ACCOUNT_ID    for the R2 S3 endpoint
 # Variable: SITE_URL — the site to back up.
 on:
   schedule:
@@ -56,12 +58,20 @@ jobs:
             echo "export attempt $attempt failed; resuming"; sleep 30
           done
           exit 1
+      # S3-compatible upload: bucket-scoped R2 credentials work here, while
+      # `wrangler r2 object put` needs a broader Cloudflare API token.
       - name: Upload to R2
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BACKUP_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 doesn't accept the CLI's default extra checksums on uploads.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           ls -lh site.emdash
-          npx wrangler r2 object put "jetsfix-backups/site/jetsfix-$STAMP.emdash" \
-            --file site.emdash --remote
+          aws s3 cp site.emdash "s3://jetsfix-backups/site/jetsfix-$STAMP.emdash" \
+            --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com" \
+            --no-progress
